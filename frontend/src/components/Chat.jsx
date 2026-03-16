@@ -4,7 +4,7 @@ import { Paperclip, SendHorizontal, Table, X } from "lucide-react";
 export default function Chat() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
-
+  const [dragActive, setDragActive] = useState(false);
   const bottomRef = useRef(null);
 
   const [messages, setMessages] = useState([]);
@@ -69,7 +69,6 @@ export default function Chat() {
             setSelectedTable(newTable);
 
             setIsUploading(false);
-            setFile(null);
           }
 
           return 100;
@@ -79,6 +78,26 @@ export default function Chat() {
       });
     }, 200);
   };
+
+const handleDragOver = (e) => {
+  e.preventDefault();
+  setDragActive(true);
+};
+
+const handleDragLeave = () => {
+  setDragActive(false);
+};
+
+const handleDrop = (e) => {
+  e.preventDefault();
+  setDragActive(false);
+
+  const droppedFile = e.dataTransfer.files[0];
+  if (!droppedFile) return;
+
+  const fakeEvent = { target: { files: [droppedFile], value: "" } };
+  handleFileSelect(fakeEvent);
+};
 
   const sendMessage = () => {
     if (!input.trim() && !file) return;
@@ -107,16 +126,96 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-100 relative">
-      {/* Messages */}
+<div
+  className="flex flex-col h-full bg-gray-100 relative"
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  onDrop={handleDrop}
+>
+   {/* Drag Overlay */}
+  {dragActive && (
+    <div className="absolute inset-0 bg-blue-100/70 flex items-center justify-center z-50">
+      <div className="text-xl font-semibold text-blue-700 border-2 border-dashed border-blue-400 p-10 rounded-lg">
+        Drop your CSV file here
+      </div>
+    </div>
+  )}
+     {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <h1 className="text-2xl font-semibold text-gray-500 text-center">
-              Add your CSV file and analyze / visualize your data using AI
-            </h1>
-          </div>
-        ) : (
+  <div className="flex flex-col items-center justify-center h-full gap-6">
+
+    <h1 className="text-2xl font-semibold text-gray-500 text-center">
+          Upload your dataset and ask Graphiee to visualize your data
+          </h1>
+
+    {/* Center Chat Box */}
+<div className="flex flex-col gap-2 w-full max-w-2xl bg-white p-3 rounded-xl shadow">
+
+  <div className="flex flex-col gap-2 w-full max-w-2xl bg-white p-3 rounded-xl shadow">
+
+  {/* File Chip */}
+  {file && (
+    <div className="flex items-center gap-3 bg-gray-900 text-white px-3 py-2 rounded-lg w-fit">
+      <div className="bg-green-500 p-2 rounded">📊</div>
+
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">{file.name}</span>
+        <span className="text-xs text-gray-300">Spreadsheet</span>
+      </div>
+
+      <button
+        onClick={() => setFile(null)}
+        className="ml-2 text-gray-300 hover:text-white"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  )}
+
+  {/* Input Row */}
+  <div className="flex items-center gap-2">
+
+    {/* Upload */}
+    <label className="cursor-pointer p-2 rounded-lg hover:bg-gray-200">
+      <Paperclip />
+      <input type="file" className="hidden" onChange={handleFileSelect} />
+    </label>
+
+    {/* Tables */}
+    <button
+      onClick={() => setDrawerOpen(true)}
+      className="p-2 rounded-lg hover:bg-gray-200"
+    >
+      <Table />
+    </button>
+
+    {/* Input */}
+    <textarea
+      value={input}
+      rows={1}
+      onChange={(e) => setInput(e.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder="Ask Graphiee..."
+      className="flex-1 resize-none border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+
+    {/* Send */}
+    <button
+      onClick={sendMessage}
+      disabled={isUploading}
+      className={`p-2 rounded-lg text-white ${
+        isUploading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"
+      }`}
+    >
+      <SendHorizontal />
+    </button>
+
+  </div>
+</div>
+    </div>
+  </div>
+) : (
           <>
             {messages.map((m) => (
               <div
@@ -156,7 +255,8 @@ export default function Chat() {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t bg-white">
+      {messages.length > 0 && (
+        <div className="p-4 border-t bg-white">
         {selectedTable && (
           <div className="mb-2 flex items-center gap-3 text-sm text-gray-700 rounded-lg bg-blue-50 border border-blue-200 max-w-fit p-3">
             <div className="flex items-center gap-2">
@@ -218,6 +318,7 @@ export default function Chat() {
           </button>
         </div>
       </div>
+)}
 
       {/* Overlay */}
       {drawerOpen && (
