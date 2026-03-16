@@ -1,81 +1,126 @@
-import { useState, useEffect } from 'react';
-import { useScroll } from '../context/ScrollProvider';
+import { useState, useEffect, useRef } from "react";
 
 export default function Chat() {
 
-    const { bottomRef, scrollToBottom } = useScroll();
+  const bottomRef = useRef(null);
 
-    const [messages, setMessages] = useState([
-        { id: 1, text: "Hello! How can I help you today?", sender: 'ai' },
-        { id: 2, text: "I need help with creating a conversational AI interface.", sender: 'user' },
-        { id: 3, text: "I'd be happy to help you design a modern chat interface. What specific features are you looking for?", sender: 'ai' }
-    ]);
-    const [inputValue, setInputValue] = useState('');
+  const [messages, setMessages] = useState([
+    { id: 1, text: "Hello! How can I help you today?", sender: "ai" },
+    { id: 2, text: "I need help building a chat UI.", sender: "user" },
+  ]);
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+  const [input, setInput] = useState("");
+  const [file, setFile] = useState(null);
 
-    const handleSend = () => {
-        if (inputValue.trim()) {
-            const newMessage = {
-                id: messages.length + 1,
-                text: inputValue,
-                sender: 'user'
-            };
-            setMessages([...messages, newMessage]);
-            setInputValue('');
-        }
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = () => {
+    if (!input.trim() && !file) return;
+
+    const msg = {
+      id: Date.now(),
+      text: input,
+      sender: "user",
+      file,
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-            handleSend();
-        }
-    };
+    setMessages((prev) => [...prev, msg]);
+    setInput("");
+    setFile(null);
+  };
 
-    return (
-        <div className="flex flex-col h-screen bg-gray-50">
-            {/* Chat Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                    <div
-                        key={message.id}
-                        className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                        <div
-                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                                message.sender === 'user'
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-white text-gray-800 border border-gray-200'
-                            }`}
-                        >
-                            {message.text}
-                        </div>
-                    </div>
-                ))}
-                <div ref={bottomRef} />
-            </div>
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
-            {/* Input Area */}
-            <div className="p-4">
-                <div className="flex space-x-2">
-                    <input
-                        type="text"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Type your message..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <button
-                        onClick={handleSend}
-                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-                    >
-                        Send
-                    </button>
+  return (
+    <div className="flex flex-col h-full bg-gray-100">
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`px-4 py-3 rounded-xl max-w-md shadow-sm
+                ${m.sender === "user"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white text-gray-800 border"}
+              `}
+            >
+              {m.text}
+
+              {m.file && (
+                <div className="mt-2 text-sm opacity-80">
+                  📎 {m.file.name}
                 </div>
+              )}
             </div>
+          </div>
+        ))}
+
+        <div ref={bottomRef} />
+
+      </div>
+
+      {/* Input */}
+      <div className="p-4 border-t bg-white">
+
+        {file && (
+          <div className="mb-2 flex items-center gap-3 text-sm text-gray-700 rounded-lg bg-gray-200 max-w-fit p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">📎</span>
+              <span className="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">{file.name}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setFile(null)}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-400 text-white hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Remove attached file"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+
+          <label className="cursor-pointer p-2 rounded-lg hover:bg-gray-200">
+            <span>📎</span>
+            <input
+              type="file"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files[0])}
+            />
+          </label>
+
+          <textarea
+            value={input}
+            rows={1}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            className="flex-1 resize-none border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          <button
+            onClick={sendMessage}
+            className="p-2 bg-blue-500 rounded-lg text-white hover:bg-blue-600"
+          >
+            Send
+          </button>
+
         </div>
-    );
+      </div>
+    </div>
+  );
 }
