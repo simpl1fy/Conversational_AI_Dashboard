@@ -6,7 +6,7 @@ import { ScrollProvider } from './context/ScrollProvider.jsx'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ScrollProvider>
-      <App />
+          <App />
     </ScrollProvider>
   </StrictMode>,
 )
