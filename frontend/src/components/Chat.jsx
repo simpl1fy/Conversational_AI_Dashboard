@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Paperclip, SendHorizontal } from "lucide-react";
 
 export default function Chat() {
 
@@ -95,7 +96,7 @@ export default function Chat() {
         <div className="flex items-center gap-2">
 
           <label className="cursor-pointer p-2 rounded-lg hover:bg-gray-200">
-            <span>📎</span>
+            <Paperclip />
             <input
               type="file"
               className="hidden"
@@ -114,9 +115,9 @@ export default function Chat() {
 
           <button
             onClick={sendMessage}
-            className="p-2 bg-blue-500 rounded-lg text-white hover:bg-blue-600"
+            className="p-2 bg-blue-500 rounded-lg text-white hover:bg-blue-600 cursor-pointer"
           >
-            Send
+            <SendHorizontal />
           </button>
 
         </div>
