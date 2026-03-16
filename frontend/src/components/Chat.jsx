@@ -1,5 +1,33 @@
 import { useState, useEffect, useRef } from "react";
 import { Paperclip, SendHorizontal, Table, X } from "lucide-react";
+import axios from 'axios';
+
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  ArcElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+import { Bar, Line, Pie } from "react-chartjs-2";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  ArcElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 export default function Chat() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -9,25 +37,13 @@ export default function Chat() {
 
   const [messages, setMessages] = useState([]);
 
-  const [tables, setTables] = useState([
-    {
-      id: "1",
-      name: "Customer Behaviour (Online vs Offline).csv",
-      tableName: "dataset_1773654054732",
-      columns: "[Age, Monthly_Income, Daily_Income_Hours]",
-      createdAt: "2026-03-16T18:32:21",
-    },
-    {
-      id: "2",
-      name: "sales_data.csv",
-      tableName: "dataset_1773659991122",
-      columns: "[region, product, revenue]",
-      createdAt: "2026-03-17T11:15:02",
-    },
-  ]);
+  const [loadingTables, setLoadingTables] = useState(true);
+  const [tables, setTables] = useState([]);
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const [uploadDialogVisible, setUploadDialogVisible] = useState(false);
 
   const [input, setInput] = useState("");
   const [file, setFile] = useState(null);
@@ -36,67 +52,127 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleFileSelect = (e) => {
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const res = await axios.get("http://localhost:8081/api/datasets");
+
+        if (Array.isArray(res.data)) {
+          setTables(res.data);
+        } else {
+          setTables([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch datasets:", err);
+        setTables([]);
+      } finally {
+        setLoadingTables(false);
+      }
+    };
+
+    fetchTables();
+  }, []);
+
+  const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile || isUploading) return;
 
     setFile(selectedFile);
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadDialogVisible(true);
+    setTimeout(() => setUploadDialogVisible(false), 1500);
     e.target.value = "";
 
-    let finished = false;
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
+      const res = await axios.post(
+        "http://localhost:8081/api/datasets/upload",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (progressEvent) => {
+            if (!progressEvent.total) return;
 
-          if (!finished) {
-            finished = true;
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
 
-            const id = crypto.randomUUID();
-
-            const newTable = {
-              id,
-              name: selectedFile.name,
-              tableName: `dataset_${Date.now()}`,
-              columns: "[Column1, Column2]",
-              createdAt: new Date().toISOString(),
-            };
-
-            setTables((prev) => [...prev, newTable]);
-            setSelectedTable(newTable);
-
-            setIsUploading(false);
-            setFile(null);
-          }
-
-          return 100;
+            setUploadProgress(percent);
+          },
         }
+      );
 
-        return prev + 10;
-      });
-    }, 200);
+      const newTable = res.data;
+
+      setTables((prev) => [...prev, newTable]);
+
+      // automatically select uploaded dataset
+      setSelectedTable(newTable);
+
+    } catch (err) {
+      console.error("Upload failed:", err);
+    } finally {
+      setIsUploading(false);
+      setFile(null);
+    }
   };
 
-  const sendMessage = () => {
-    if (!input.trim() && !file) return;
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedTable) return;
 
-    const msg = {
+    const queryText = input;
+
+    const userMsg = {
       id: crypto.randomUUID(),
-      text: input,
+      text: queryText,
       sender: "user",
-      file,
-      table: selectedTable
-        ? { id: selectedTable.id, name: selectedTable.name }
-        : null,
+      table: {
+        id: selectedTable.id,
+        name: selectedTable.name,
+      },
     };
 
-    setMessages((prev) => [...prev, msg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setFile(null);
-    setSelectedTable(null);
+
+    try {
+      const res = await axios.post("http://localhost:8081/api/query", {
+        datasetId: selectedTable.id,
+        query: queryText,
+      });
+
+      const response = res.data;
+
+      const aiMsg = {
+        id: crypto.randomUUID(),
+        sender: "ai",
+        sql: response.sql,
+        chartType: response.chartType,
+        chart: {
+          labels: response.labels,
+          values: response.values,
+        },
+        data: response.data,
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error("Query failed:", err);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          text: "Query execution failed.",
+        },
+      ]);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -121,29 +197,69 @@ export default function Chat() {
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={`flex ${
-                  m.sender === "user" ? "justify-end" : "justify-start"
-                }`}
+                className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"
+                  }`}
               >
                 <div
                   className={`px-4 py-3 rounded-xl max-w-md shadow-sm
-                  ${
-                    m.sender === "user"
+                  ${m.sender === "user"
                       ? "bg-blue-500 text-white"
                       : "bg-white text-gray-800 border"
-                  }`}
+                    }`}
                 >
-                  {m.text}
+                  {m.text && <p>{m.text}</p>}
 
-                  {m.table && (
-                    <div className="mt-2 text-sm opacity-80">
-                      🧾 Table: {m.table.name}
-                    </div>
+                  {m.sql && (
+                    <pre className="mt-2 text-xs bg-gray-900 text-green-400 p-2 rounded overflow-x-auto">
+                      {m.sql}
+                    </pre>
                   )}
 
-                  {m.file && (
-                    <div className="mt-2 text-sm opacity-80">
-                      📎 {m.file.name}
+                  {m.chart && (
+                    <div className="mt-4 w-full max-w-md">
+                      {m.chartType === "bar" && (
+                        <Bar
+                          data={{
+                            labels: m.chart.labels,
+                            datasets: [
+                              {
+                                label: "Result",
+                                data: m.chart.values,
+                                backgroundColor: "rgba(59,130,246,0.7)",
+                              },
+                            ],
+                          }}
+                          options={{ responsive: true }}
+                        />
+                      )}
+
+                      {m.chartType === "line" && (
+                        <Line
+                          data={{
+                            labels: m.chart.labels,
+                            datasets: [
+                              {
+                                label: "Result",
+                                data: m.chart.values,
+                                borderColor: "rgba(59,130,246,1)",
+                              },
+                            ],
+                          }}
+                        />
+                      )}
+
+                      {m.chartType === "pie" && (
+                        <Pie
+                          data={{
+                            labels: m.chart.labels,
+                            datasets: [
+                              {
+                                data: m.chart.values,
+                              },
+                            ],
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -210,9 +326,8 @@ export default function Chat() {
           <button
             onClick={sendMessage}
             disabled={isUploading}
-            className={`p-2 rounded-lg text-white ${
-              isUploading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"
-            }`}
+            className={`p-2 rounded-lg text-white ${isUploading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"
+              }`}
           >
             <SendHorizontal />
           </button>
@@ -240,36 +355,46 @@ export default function Chat() {
         </div>
 
         <div className="p-4 space-y-3 overflow-y-auto">
-          {tables.map((table) => (
-            <div
-              key={table.id}
-              className={`border rounded-lg p-3 cursor-pointer hover:bg-gray-50
-              ${
-                selectedTable?.id === table.id
-                  ? "border-blue-500 bg-blue-50"
-                  : ""
-              }`}
-              onClick={() => {
-                setSelectedTable(table);
-                setDrawerOpen(false);
-              }}
-            >
-              <p className="font-medium">{table.name}</p>
 
-              <p className="text-sm text-gray-500">{table.tableName}</p>
+          {loadingTables && (
+            <p className="text-sm text-gray-500">Loading tables...</p>
+          )}
 
-              <p className="text-xs text-gray-400 mt-1">
-                Columns: {table.columns}
-              </p>
-
-              <p className="text-xs text-gray-400">{table.createdAt}</p>
+          {!loadingTables && tables.length === 0 && (
+            <div className="text-sm text-gray-500 text-center mt-6">
+              No tables found. Please add a CSV file to start visualizing.
             </div>
-          ))}
+          )}
+
+          {!loadingTables &&
+            tables.length > 0 &&
+            tables.map((table) => (
+              <div
+                key={table.id}
+                className={`border rounded-lg p-3 cursor-pointer hover:bg-gray-50
+        ${selectedTable?.id === table.id ? "border-blue-500 bg-blue-50" : ""}`}
+                onClick={() => {
+                  setSelectedTable(table);
+                  setDrawerOpen(false);
+                }}
+              >
+                <p className="font-medium whitespace-normal break-words">{table.name}</p>
+
+                <p className="text-sm text-gray-500 whitespace-normal break-words">{table.tableName}</p>
+
+                <p className="text-xs text-gray-400 mt-1 whitespace-normal break-words">
+                  Columns: {table.columns}
+                </p>
+
+                <p className="text-xs text-gray-400 whitespace-normal break-words">{table.createdAt}</p>
+              </div>
+            ))}
+
         </div>
       </div>
 
       {/* Upload Progress Dialog */}
-      {isUploading && (
+      {uploadDialogVisible && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">
