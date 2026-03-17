@@ -55,7 +55,7 @@ export default function Chat() {
   useEffect(() => {
     const fetchTables = async () => {
       try {
-        const res = await axios.get("http://localhost:8081/api/datasets");
+        const res = await axios.get("http://localhost:8081/api/datasets/tables");
 
         if (Array.isArray(res.data)) {
           setTables(res.data);
@@ -446,7 +446,7 @@ const handleDrop = (e) => {
 
       {/* Drawer */}
       <div
-        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300
+        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 overflow-y-auto
         ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="flex items-center justify-between p-4 border-b">
