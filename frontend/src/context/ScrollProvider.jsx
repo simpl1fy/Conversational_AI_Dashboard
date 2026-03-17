@@ -15,5 +15,3 @@ export function ScrollProvider({ children }) {
         </ScrollContext.Provider>
     )
 }
-
-export const useScroll = () => useContext(ScrollContext);
